@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import pandas as pd
@@ -65,9 +65,10 @@ class jma:
         station: str,
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
+        granularity: str = "hourly",
         out_dir: str = "csv",
     ) -> pd.DataFrame:
-        """Download hourly AMeDAS data for a given station.
+        """Download AMeDAS data for a given station.
 
         Parameters
         ----------
@@ -76,9 +77,13 @@ class jma:
         start: datetime, optional
             Start of the interval. Defaults to 24 hours before ``end``.
         end: datetime, optional
-            End of the interval. Defaults to ``datetime.utcnow()``.
+            End of the interval. Defaults to ``datetime.now(timezone.utc)``.
+        granularity: str
+            Time granularity of the data. Currently only ``"hourly"`` is
+            supported.
         out_dir: str
-            Base directory where CSV files are stored.
+            Base directory where CSV files are stored. Files are written to
+            ``{out_dir}/YYYY/MM/station_YYYYMMDD.csv``.
 
         Returns
         -------
@@ -86,7 +91,10 @@ class jma:
             DataFrame containing the scraped data. Empty if download fails.
         """
 
-        end = end or datetime.utcnow()
+        if granularity != "hourly":
+            raise ValueError("Only 'hourly' granularity is supported")
+
+        end = end or datetime.now(timezone.utc)
         start = start or (end - timedelta(days=1))
 
         row = self.stations[self.stations["name"] == station]
@@ -121,19 +129,22 @@ class jma:
             df = tables[0].dropna(how="all")
             df.insert(0, "date", current.strftime("%Y-%m-%d"))
             frames.append(df)
+
+            # Save to csv/YYYY/MM/station_YYYYMMDD.csv
+            year = current.strftime("%Y")
+            month = current.strftime("%m")
+            day = current.strftime("%Y%m%d")
+            day_dir = os.path.join(out_dir, year, month)
+            os.makedirs(day_dir, exist_ok=True)
+            fname = f"{station}_{day}.csv"
+            df.to_csv(os.path.join(day_dir, fname), index=False)
+
             current += timedelta(days=1)
 
         if not frames:
             return pd.DataFrame()
 
         result = pd.concat(frames, ignore_index=True)
-
-        # Save to csv/station/...
-        station_dir = os.path.join(out_dir, station)
-        os.makedirs(station_dir, exist_ok=True)
-        fname = f"{station}_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.csv"
-        path = os.path.join(station_dir, fname)
-        result.to_csv(path, index=False)
         return result
 
 
