@@ -238,5 +238,11 @@ class jma:
 
 if __name__ == "__main__":
     scraper = jma()
-    df = scraper.amedas("東京",datetime(2016,1,1),datetime(2025,8,5),"hourly")
-    print(df.head())
+    cities = ["札幌", "仙台", "東京", "名古屋", "金沢", "大阪", "広島", "高松", "福岡"]
+    start_date = datetime(2016, 1, 1)
+    end_date = datetime(2025, 8, 5)
+
+    for city in cities:
+        scraper.amedas(city,start_date,end_date,"hourly")
+        print(f"Fetching AMeDAS for {city}: {start_date} to {end_date}")
+    print()
