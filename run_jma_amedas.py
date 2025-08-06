@@ -16,7 +16,7 @@ def main() -> None:
     ]
 
     for city in cities:
-        scraper.amedas(city, granularity="hourly")
+        scraper.amedas(city, "hourly")
         print(f"Fetching AMeDAS for {city}")
     print()
 
