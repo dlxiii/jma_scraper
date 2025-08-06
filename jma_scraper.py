@@ -69,7 +69,7 @@ class jma:
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         granularity: str = "all",
-        out_dir: str = "csv",
+        out_dir: str = "csv/amedas",
     ) -> pd.DataFrame:
         """Download AMeDAS data for a given station.
 
@@ -238,7 +238,7 @@ class jma:
 
 if __name__ == "__main__":
     scraper = jma()
-    cities = ["札幌", "仙台", "東京", "名古屋", "金沢", "大阪", "広島", "高松", "福岡"]
+    cities = ["札幌", "仙台", "東京", "名古屋", "金沢", "大阪", "広島", "高松(香川県)", "福岡"]
     start_date = datetime(2016, 1, 1)
     end_date = datetime(2025, 8, 5)
 
