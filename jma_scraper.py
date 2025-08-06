@@ -82,13 +82,9 @@ class jma:
             Time granularity of the data. ``"hourly"`` downloads data for each
             day between ``start`` and ``end`` and stores them under
             ``{out_dir}/YYYY/MM/station_YYYYMMDD.csv``. ``"daily"`` downloads
-            one CSV per month to ``{out_dir}/YYYY/station_YYYYMM.csv``.
-            ``"10daily"`` downloads three ten-day summaries for each month
-            and stores them under ``{out_dir}/YYYY/MM/station_YYYYMM#.csv``
-            where ``#`` is 1--3. ``"monthly"`` downloads yearly summaries to
-            ``{out_dir}/station_YYYY.csv`` and ``"3monthly"`` downloads
-            3-month summaries to ``{out_dir}/YYYY/station_YYYYQ#.csv`` where
-            ``#`` is 1--4.
+            one CSV per month to ``{out_dir}/YYYY/station_YYYYMM.csv`` and
+            ``"monthly"`` downloads yearly summaries to
+            ``{out_dir}/station_YYYY.csv``.
         out_dir: str
             Base directory where CSV files are stored.
 
@@ -186,48 +182,6 @@ class jma:
                 os.makedirs(year_dir, exist_ok=True)
                 fname = f"{station}_{current.strftime('%Y%m')}.csv"
                 df.to_csv(os.path.join(year_dir, fname), index=False)
-        elif granularity == "10daily":
-            start_month = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
-            end_month = datetime(end.year, end.month, 1, tzinfo=end.tzinfo)
-            months = pd.date_range(start=start_month, end=end_month, freq="MS")
-            for current in months:
-                url = (
-                    "https://www.data.jma.go.jp/stats/etrn/view/10daily_s1.php?"
-                    f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
-                    f"&month={current.month:02d}&day=01&view=p1"
-                )
-                try:
-                    tables = pd.read_html(
-                        url,
-                        encoding="utf-8",
-                        header=0,
-                    )
-                except Exception as exc:
-                    print(f"Failed to fetch {url}: {exc}")
-                    continue
-
-                if not tables:
-                    continue
-
-                df = tables[0].dropna(how="all")
-                df.rename(columns={df.columns[0]: "day"}, inplace=True)
-                df = df[pd.to_numeric(df["day"], errors="coerce").notna()]
-
-                # Determine ten-day period (1-3)
-                periods = ((df["day"].astype(int) - 1) // 10) + 1
-                for period, row in zip(periods, df.to_dict("records")):
-                    period_df = pd.DataFrame([row])
-                    period_dir = os.path.join(
-                        out_dir, f"{current.year:04d}", f"{current.month:02d}"
-                    )
-                    os.makedirs(period_dir, exist_ok=True)
-                    fname = (
-                        f"{station}_{current.strftime('%Y%m')}{int(period)}.csv"
-                    )
-                    period_df.to_csv(
-                        os.path.join(period_dir, fname), index=False
-                    )
-                    frames.append(period_df)
 
         elif granularity == "monthly":
             start_year = datetime(start.year, 1, 1, tzinfo=start.tzinfo)
@@ -258,43 +212,6 @@ class jma:
                 os.makedirs(out_dir, exist_ok=True)
                 fname = f"{station}_{current.strftime('%Y')}.csv"
                 df.to_csv(os.path.join(out_dir, fname), index=False)
-
-        elif granularity == "3monthly":
-            start_year = datetime(start.year, 1, 1, tzinfo=start.tzinfo)
-            end_year = datetime(end.year, 1, 1, tzinfo=end.tzinfo)
-            years = pd.date_range(start=start_year, end=end_year, freq="YS")
-            for current in years:
-                url = (
-                    "https://www.data.jma.go.jp/stats/etrn/view/3monthly_s1.php?"
-                    f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
-                    "&month=01&day=01&view=p1"
-                )
-                try:
-                    tables = pd.read_html(
-                        url,
-                        encoding="utf-8",
-                        header=0,
-                    )
-                except Exception as exc:
-                    print(f"Failed to fetch {url}: {exc}")
-                    continue
-
-                if not tables:
-                    continue
-
-                df = tables[0].dropna(how="all")
-                df.rename(columns={df.columns[0]: "period"}, inplace=True)
-                df = df.head(4)  # first four quarters
-
-                for quarter, row in enumerate(df.to_dict("records"), start=1):
-                    quarter_df = pd.DataFrame([row])
-                    year_dir = os.path.join(out_dir, f"{current.year:04d}")
-                    os.makedirs(year_dir, exist_ok=True)
-                    fname = f"{station}_{current.year}Q{quarter}.csv"
-                    quarter_df.to_csv(
-                        os.path.join(year_dir, fname), index=False
-                    )
-                    frames.append(quarter_df)
 
         else:
             raise ValueError("Unsupported granularity")
