@@ -103,15 +103,23 @@ class jma:
             DataFrame containing the scraped data. Empty if download fails.
         """
 
-        end = end or datetime.now(JST)
-        start = start or (end - timedelta(days=1))
+        if end:
+            end = (
+                end.astimezone(JST) if end.tzinfo else end.replace(tzinfo=JST)
+            ).date()
+        else:
+            end = datetime.now(JST).date()
 
-        # Show the resolved time range in logs to verify JST handling
-        print(
-            f"Fetching AMeDAS for {station} from "
-            f"{start.astimezone(JST).strftime('%Y-%m-%d %H:%M:%S %Z')} to "
-            f"{end.astimezone(JST).strftime('%Y-%m-%d %H:%M:%S %Z')}"
-        )
+        if start:
+            start = (
+                start.astimezone(JST)
+                if start.tzinfo
+                else start.replace(tzinfo=JST)
+            ).date()
+        else:
+            start = end - timedelta(days=1)
+
+        print(f"Fetching AMeDAS for {station} from {start} to {end} (JST)")
 
         if granularity == "all":
             dfs = []
@@ -149,7 +157,7 @@ class jma:
 
         if granularity == "hourly":
             current = start
-            while current.date() <= end.date():
+            while current <= end:
                 url = (
                     "https://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?"
                     f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
@@ -186,8 +194,8 @@ class jma:
                 current += timedelta(days=1)
 
         elif granularity == "daily":
-            start_month = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
-            end_month = datetime(end.year, end.month, 1, tzinfo=end.tzinfo)
+            start_month = datetime(start.year, start.month, 1, tzinfo=JST)
+            end_month = datetime(end.year, end.month, 1, tzinfo=JST)
             months = pd.date_range(start=start_month, end=end_month, freq="MS")
             for current in months:
                 url = (
@@ -226,8 +234,8 @@ class jma:
                 df.to_csv(os.path.join(year_dir, fname), index=False)
 
         elif granularity == "monthly":
-            start_year = datetime(start.year, 1, 1, tzinfo=start.tzinfo)
-            end_year = datetime(end.year, 1, 1, tzinfo=end.tzinfo)
+            start_year = datetime(start.year, 1, 1, tzinfo=JST)
+            end_year = datetime(end.year, 1, 1, tzinfo=JST)
             years = pd.date_range(start=start_year, end=end_year, freq="YS")
             for current in years:
                 url = (
