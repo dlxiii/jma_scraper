@@ -6,7 +6,8 @@ import pandas as pd
 import requests
 
 
-JST = timezone(timedelta(hours=9))
+# Explicitly name the timezone so log output shows "JST"
+JST = timezone(timedelta(hours=9), "JST")
 
 
 class jma:
@@ -104,6 +105,13 @@ class jma:
 
         end = end or datetime.now(JST)
         start = start or (end - timedelta(days=1))
+
+        # Show the resolved time range in logs to verify JST handling
+        print(
+            f"Fetching AMeDAS for {station} from "
+            f"{start.astimezone(JST).strftime('%Y-%m-%d %H:%M:%S %Z')} to "
+            f"{end.astimezone(JST).strftime('%Y-%m-%d %H:%M:%S %Z')}"
+        )
 
         if granularity == "all":
             dfs = []
