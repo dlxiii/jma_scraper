@@ -119,7 +119,7 @@ class jma:
         else:
             start = end - timedelta(days=0)
 
-        print(f"Fetching AMeDAS for {station} from {start} to {end} (JST)")
+        print(f"Fetching AMeDAS for {station} on {end} (JST)")
 
         if granularity == "all":
             dfs = []
