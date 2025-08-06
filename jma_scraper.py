@@ -18,12 +18,15 @@ class jma:
         "https://raw.githubusercontent.com/"
         "KatsuhiroMorishita/AMeDAS_downloader/master/AMeDAS_list.csv"
     )
+    STATION_LIST_LOCAL = os.path.join(
+        os.path.dirname(__file__), "AMeDAS_list.csv"
+    )
 
     def __init__(self) -> None:
         self.stations = self._load_stations()
 
     def _load_stations(self) -> pd.DataFrame:
-        """Load station metadata from the remote CSV file."""
+        """Load station metadata, updating a local cached CSV file."""
         cols = [
             "prec_no",
             "block_no",
@@ -36,8 +39,18 @@ class jma:
             "area_code",
             "group_code",
         ]
+        try:
+            response = requests.get(self.STATION_LIST_URL, timeout=10)
+            response.raise_for_status()
+            with open(self.STATION_LIST_LOCAL, "wb") as fh:
+                fh.write(response.content)
+        except Exception as exc:
+            print(f"Failed to update station list: {exc}")
+            if not os.path.exists(self.STATION_LIST_LOCAL):
+                raise
+
         df = pd.read_csv(
-            self.STATION_LIST_URL,
+            self.STATION_LIST_LOCAL,
             sep="\t",
             names=cols,
             encoding="utf-8",
