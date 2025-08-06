@@ -238,5 +238,5 @@ class jma:
 
 if __name__ == "__main__":
     scraper = jma()
-    df = scraper.amedas("東京")
+    df = scraper.amedas("東京",datetime(2016,1,1),datetime(2025,8,5),"hourly")
     print(df.head())
