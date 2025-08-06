@@ -84,8 +84,8 @@ class jma:
         start: datetime, optional
             Start of the interval. Defaults to 24 hours before ``end``.
         end: datetime, optional
-            End of the interval. Defaults to the current time in Japan
-            (``datetime.now(JST)``).
+            End of the interval. Defaults to 1 day before the current time in
+            Japan (``datetime.now(JST) - timedelta(days=1)``).
         granularity: str
             Time granularity of the data. ``"hourly"`` downloads data for each
             day between ``start`` and ``end`` and stores them under
@@ -108,7 +108,7 @@ class jma:
                 end.astimezone(JST) if end.tzinfo else end.replace(tzinfo=JST)
             ).date()
         else:
-            end = datetime.now(JST).date()
+            end = (datetime.now(JST) - timedelta(days=1)).date()
 
         if start:
             start = (
