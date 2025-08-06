@@ -60,6 +60,7 @@ class jma:
             engine="python",
         )
         df["name"] = df["name"].str.strip()
+        df["group_name"] = df["group_name"].str.strip()
         df["block_no"] = df["block_no"].astype(str).str.zfill(4)
         return df
 
@@ -76,7 +77,9 @@ class jma:
         Parameters
         ----------
         station: str
-            Name of the station in Japanese as listed in AMeDAS_list.csv.
+            Name of the station in Japanese as listed in AMeDAS_list.csv. If
+            multiple stations share the same name, specify the prefecture or
+            region in parentheses, e.g. ``"高松(香川県)"``.
         start: datetime, optional
             Start of the interval. Defaults to 24 hours before ``end``.
         end: datetime, optional
@@ -110,7 +113,25 @@ class jma:
                     dfs.append(df)
             return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
-        row = self.stations[self.stations["name"] == station]
+        station_name = station
+        group_name = None
+        if "(" in station and station.endswith(")"):
+            station_name, group_name = station[:-1].split("(", 1)
+            station_name = station_name.strip()
+            group_name = group_name.strip()
+
+        if group_name:
+            row = self.stations[
+                (self.stations["name"] == station_name)
+                & (self.stations["group_name"] == group_name)
+            ]
+        else:
+            row = self.stations[self.stations["name"] == station_name]
+            if len(row) > 1:
+                raise ValueError(
+                    "Station name is not unique. Specify as 'name(prefecture)'."
+                )
+
         if row.empty:
             raise ValueError(f"Unknown station: {station}")
         prec_no = row.iloc[0]["prec_no"]
