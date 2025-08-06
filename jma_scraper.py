@@ -79,20 +79,20 @@ class jma:
         end: datetime, optional
             End of the interval. Defaults to ``datetime.now(timezone.utc)``.
         granularity: str
-            Time granularity of the data. Currently only ``"hourly"`` is
-            supported.
+            Time granularity of the data. ``"hourly"`` downloads data for each
+            day between ``start`` and ``end`` and stores them under
+            ``{out_dir}/YYYY/MM/station_YYYYMMDD.csv``. ``"daily"`` downloads
+            one CSV per month to ``{out_dir}/YYYY/station_YYYYMM.csv`` and
+            ``"monthly"`` downloads yearly summaries to
+            ``{out_dir}/station_YYYY.csv``.
         out_dir: str
-            Base directory where CSV files are stored. Files are written to
-            ``{out_dir}/YYYY/MM/station_YYYYMMDD.csv``.
+            Base directory where CSV files are stored.
 
         Returns
         -------
         pandas.DataFrame
             DataFrame containing the scraped data. Empty if download fails.
         """
-
-        if granularity != "hourly":
-            raise ValueError("Only 'hourly' granularity is supported")
 
         end = end or datetime.now(timezone.utc)
         start = start or (end - timedelta(days=1))
@@ -104,42 +104,117 @@ class jma:
         block_no = row.iloc[0]["block_no"]
 
         frames = []
-        current = start
-        while current.date() <= end.date():
-            url = (
-                "https://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?"
-                f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
-                f"&month={current.month}&day={current.day}&view="
-            )
-            try:
-                tables = pd.read_html(
-                    url,
-                    encoding="utf-8",
-                    header=0,
+
+        if granularity == "hourly":
+            current = start
+            while current.date() <= end.date():
+                url = (
+                    "https://www.data.jma.go.jp/obd/stats/etrn/view/hourly_s1.php?"
+                    f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
+                    f"&month={current.month}&day={current.day}&view="
                 )
-            except Exception as exc:  # network error or parser error
-                print(f"Failed to fetch {url}: {exc}")
+                try:
+                    tables = pd.read_html(
+                        url,
+                        encoding="utf-8",
+                        header=0,
+                    )
+                except Exception as exc:  # network error or parser error
+                    print(f"Failed to fetch {url}: {exc}")
+                    current += timedelta(days=1)
+                    continue
+
+                if not tables:
+                    current += timedelta(days=1)
+                    continue
+
+                df = tables[0].dropna(how="all")
+                df.insert(0, "date", current.strftime("%Y-%m-%d"))
+                frames.append(df)
+
+                # Save to csv/YYYY/MM/station_YYYYMMDD.csv
+                year = current.strftime("%Y")
+                month = current.strftime("%m")
+                day = current.strftime("%Y%m%d")
+                day_dir = os.path.join(out_dir, year, month)
+                os.makedirs(day_dir, exist_ok=True)
+                fname = f"{station}_{day}.csv"
+                df.to_csv(os.path.join(day_dir, fname), index=False)
+
                 current += timedelta(days=1)
-                continue
 
-            if not tables:
-                current += timedelta(days=1)
-                continue
+        elif granularity == "daily":
+            start_month = datetime(start.year, start.month, 1, tzinfo=start.tzinfo)
+            end_month = datetime(end.year, end.month, 1, tzinfo=end.tzinfo)
+            months = pd.date_range(start=start_month, end=end_month, freq="MS")
+            for current in months:
+                url = (
+                    "https://www.data.jma.go.jp/stats/etrn/view/daily_s1.php?"
+                    f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
+                    f"&month={current.month:02d}&day=01&view=p1"
+                )
+                try:
+                    tables = pd.read_html(
+                        url,
+                        encoding="utf-8",
+                        header=0,
+                    )
+                except Exception as exc:
+                    print(f"Failed to fetch {url}: {exc}")
+                    continue
 
-            df = tables[0].dropna(how="all")
-            df.insert(0, "date", current.strftime("%Y-%m-%d"))
-            frames.append(df)
+                if not tables:
+                    continue
 
-            # Save to csv/YYYY/MM/station_YYYYMMDD.csv
-            year = current.strftime("%Y")
-            month = current.strftime("%m")
-            day = current.strftime("%Y%m%d")
-            day_dir = os.path.join(out_dir, year, month)
-            os.makedirs(day_dir, exist_ok=True)
-            fname = f"{station}_{day}.csv"
-            df.to_csv(os.path.join(day_dir, fname), index=False)
+                df = tables[0].dropna(how="all")
+                df.rename(columns={df.columns[0]: "day"}, inplace=True)
+                df = df[pd.to_numeric(df["day"], errors="coerce").notna()]
+                df["date"] = pd.to_datetime(
+                    {
+                        "year": current.year,
+                        "month": current.month,
+                        "day": df["day"].astype(int),
+                    }
+                ).dt.strftime("%Y-%m-%d")
+                frames.append(df)
 
-            current += timedelta(days=1)
+                year_dir = os.path.join(out_dir, f"{current.year:04d}")
+                os.makedirs(year_dir, exist_ok=True)
+                fname = f"{station}_{current.strftime('%Y%m')}.csv"
+                df.to_csv(os.path.join(year_dir, fname), index=False)
+
+        elif granularity == "monthly":
+            start_year = datetime(start.year, 1, 1, tzinfo=start.tzinfo)
+            end_year = datetime(end.year, 1, 1, tzinfo=end.tzinfo)
+            years = pd.date_range(start=start_year, end=end_year, freq="YS")
+            for current in years:
+                url = (
+                    "https://www.data.jma.go.jp/stats/etrn/view/monthly_s1.php?"
+                    f"prec_no={prec_no}&block_no={block_no}&year={current.year}"
+                    "&month=01&day=01&view=p1"
+                )
+                try:
+                    tables = pd.read_html(
+                        url,
+                        encoding="utf-8",
+                        header=0,
+                    )
+                except Exception as exc:
+                    print(f"Failed to fetch {url}: {exc}")
+                    continue
+
+                if not tables:
+                    continue
+
+                df = tables[0].dropna(how="all")
+                frames.append(df)
+
+                os.makedirs(out_dir, exist_ok=True)
+                fname = f"{station}_{current.strftime('%Y')}.csv"
+                df.to_csv(os.path.join(out_dir, fname), index=False)
+
+        else:
+            raise ValueError("Unsupported granularity")
 
         if not frames:
             return pd.DataFrame()
