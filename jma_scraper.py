@@ -6,11 +6,14 @@ import pandas as pd
 import requests
 
 
+JST = timezone(timedelta(hours=9))
+
+
 class jma:
     """Simple scraper for JMA AMeDAS data.
 
-    The class downloads hourly AMeDAS observations for a given station
-    between two dates and stores the result as CSV. Station information is
+    The class downloads AMeDAS observations for a given station between
+    two dates and stores the result as CSV. Station information is
     obtained from the AMeDAS_downloader repository.
     """
 
@@ -65,7 +68,7 @@ class jma:
         station: str,
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
-        granularity: str = "hourly",
+        granularity: str = "all",
         out_dir: str = "csv",
     ) -> pd.DataFrame:
         """Download AMeDAS data for a given station.
@@ -77,14 +80,16 @@ class jma:
         start: datetime, optional
             Start of the interval. Defaults to 24 hours before ``end``.
         end: datetime, optional
-            End of the interval. Defaults to ``datetime.now(timezone.utc)``.
+            End of the interval. Defaults to the current time in Japan
+            (``datetime.now(JST)``).
         granularity: str
             Time granularity of the data. ``"hourly"`` downloads data for each
             day between ``start`` and ``end`` and stores them under
             ``{out_dir}/YYYY/MM/station_YYYYMMDD.csv``. ``"daily"`` downloads
             one CSV per month to ``{out_dir}/YYYY/station_YYYYMM.csv`` and
             ``"monthly"`` downloads yearly summaries to
-            ``{out_dir}/station_YYYY.csv``.
+            ``{out_dir}/station_YYYY.csv``. ``"all"`` downloads all three
+            granularities and concatenates the results. This is the default.
         out_dir: str
             Base directory where CSV files are stored.
 
@@ -94,8 +99,16 @@ class jma:
             DataFrame containing the scraped data. Empty if download fails.
         """
 
-        end = end or datetime.now(timezone.utc)
+        end = end or datetime.now(JST)
         start = start or (end - timedelta(days=1))
+
+        if granularity == "all":
+            dfs = []
+            for g in ("hourly", "daily", "monthly"):
+                df = self.amedas(station, start, end, g, out_dir)
+                if not df.empty:
+                    dfs.append(df)
+            return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
         row = self.stations[self.stations["name"] == station]
         if row.empty:
