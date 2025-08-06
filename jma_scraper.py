@@ -117,7 +117,7 @@ class jma:
                 else start.replace(tzinfo=JST)
             ).date()
         else:
-            start = end - timedelta(days=1)
+            start = end - timedelta(days=0)
 
         print(f"Fetching AMeDAS for {station} from {start} to {end} (JST)")
 
